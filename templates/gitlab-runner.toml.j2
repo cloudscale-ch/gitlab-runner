@@ -1,0 +1,32 @@
+concurrent = {{ config.gitlab_runner.runner_limit }}
+
+[[runners]]
+  url = "{{ external_url }}"
+  token = "{{ gitlab_runner_token.stdout }}"             
+  name = "Autoscale Runner Manager"
+  executor = "docker+machine"
+
+  [runners.machine]
+    MachineName = "autoscale-%s"
+    MachineDriver = "cloudscale"
+    MachineOptions = [
+        "cloudscale-token={{ cloudscale_api_token }}",
+        "cloudscale-image={{ config.gitlab_runner.image }}",
+        "cloudscale-flavor={{ config.gitlab_runner.flavor }}",
+    ]
+
+    IdleCount = {{ config.gitlab_runner.idle_count }}
+    IdleTime = {{ config.gitlab_runner.idle_time }}
+    MaxBuilds = {{ config.gitlab_runner.max_builds }}
+    MaxGrowthRate = {{ config.gitlab_runner.max_growth_rate }}
+
+{% if config.gitlab_runner.s3_cache %}
+  [runners.cache]
+    Type = "s3"
+
+    [runners.cache.s3]
+      ServerAddress = "{{ config.gitlab_runner.s3_endpoint }}"
+      AccessKey = "{{ config.gitlab_runner.s3_access_key }}"
+      SecretKey = "{{ config.gitlab_runner.s3_secret_key }}"
+      BucketName = "{{ config.gitlab_runner.s3_bucket }}"
+{% endif %}

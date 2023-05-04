@@ -1,0 +1,95 @@
+# Configures the GitLab server, used by playbooks/launch-gitlab.yml
+gitlab:
+
+  # The version to install (use gitlab-ee for the enterprise version)
+  package: gitlab-ce
+
+  # The name of the server to launch.
+  name: gitlab
+
+  # The fully qualified server name. This will be used for Let's Encrypt. If
+  # 'auto' is used, a cust.cloudscale.ch entry is used instead. Should you use
+  # your own DNS entry, be sure to point it to the right IP after the server
+  # has been launched. The playbook will pause for this.
+  fqdn: auto
+
+  # Wheter to use Let's Encrypt
+  lets_encrypt_enabled: true
+
+  # The email address for Let's Encrypt requests
+  lets_encrypt_contact: ''
+
+  # The image used for the GitLab server, note that this repository assumes
+  # this to be Debian, Ubuntu, RHEL, or CentOS. Though adding support for
+  # another distribution should be easy.
+  image: ubuntu-22.04
+
+  # GitLab requires 4GB of RAM and recommends 4 CPU cores. We use 8GB of RAM,
+  # since we intend to run a single GitLab Runner on the same host.
+  flavor: flex-8-4
+
+  # Can be either lpg1, or rma1.
+  zone: rma1
+
+  # Depending on your needs, you may want to increase this.
+  volume_size_gb: 25
+
+  # At least one public SSH key, to access the server.
+  ssh_keys: []
+
+  # Cloud-init, to ensure that the server gets all the latest patches, after
+  # it has been launched. Note that further package upgrade policies are
+  # your responsibility.
+  user_data: |
+    #cloud-config
+    package_upgrade: true
+
+# GitLab Runner settings
+gitlab_runner:
+
+  # The image to use as a base for the runners
+  image: ubuntu-22.04
+
+  # The flavor to use for the runners
+  flavor: flex-8-4
+
+  # Upper limit of autoscaled runners
+  runner_limit: 10
+
+  # How many runners should be kept running at all times
+  idle_count: 0
+
+  # How long an idle runner is kept running
+  idle_time: 60
+
+  # The number of builds a runner completes, before it is removed
+  max_builds: 100
+
+  # How many runners should be newly added in parallel
+  max_growth_rate: 2
+
+  # You can optionally use S3 for CI caches. This allows you to use the 'cache'
+  # key in your .gitlab-ci.yml, and have that cache shared across runners.
+  #
+  # To get started, use `true` below, then create an object user and a bucket
+  # on https://control.cloudscale.ch. The bucket has to exist, and you need
+  # to use the endpoint where the bucket was created, for this to work.
+  s3_cache: false
+
+  # Set to rma/lpg depending on where you created your bucket
+  s3_endpoint: objects.rma.cloudscale.ch
+
+  # The credentials shown in your control panel
+  s3_access_key: ''
+  s3_secret_key: ''
+
+  # The name of the bucket you created (must exist already).
+  s3_bucket: ''
+
+  # Docker Machine version to use
+  docker_machine_url: https://gitlab-docker-machine-downloads.s3.amazonaws.com/v0.16.2-gitlab.19/docker-machine-Linux-x86_64
+  docker_machine_checksum: sha256:0c92b4acead3fbca5e27cae1df9f3b2b7ca0874faa7689d4c3fb3988cae11929
+
+  # cloudscale.ch Docker Machine driver
+  cloudscale_driver_url: https://github.com/cloudscale-ch/docker-machine-driver-cloudscale/releases/download/v1.2.1/docker-machine-driver-cloudscale_1.2.1_linux_amd64.tar.gz
+  cloudscale_driver_checksum: sha256:829816d11790997877124b500e5ca1980078babe8efac2e7b58026899de10940

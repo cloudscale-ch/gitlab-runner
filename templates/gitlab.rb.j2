@@ -1,0 +1,18 @@
+# GitLab Configuration
+# --------------------
+#
+# A commented version with all values can be found here:
+# https://gitlab.com/gitlab-org/omnibus-gitlab/raw/master/files/gitlab-config-template/gitlab.rb.template
+# 
+# To compare the difference between the default config and the currently
+# running version, run `gitlab-ctl diff-config`.
+
+# GitLab URL
+external_url '{{ external_url }}'
+
+# Force HTTPS for the web interface
+nginx['redirect_http_to_https'] = true
+
+# SSL certificate
+letsencrypt['enable'] = {{ config.gitlab.lets_encrypt_enabled | bool | string | lower }}
+letsencrypt['contact_emails'] = ['{{ config.gitlab.lets_encrypt_contact }}']

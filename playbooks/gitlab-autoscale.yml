@@ -1,0 +1,299 @@
+#!/usr/bin/env ansible-playbook
+
+- name: Launch GitLab Server VM
+  hosts: localhost
+  tasks:
+
+    # Load and Verify Config
+    # -------------------------------------------------------------------------
+    - name: Load config
+      include_vars:
+        file: ../config.yml
+        name: config
+
+    - name: Verify SSH key
+      assert:
+        that:
+          - '{{ config.gitlab.ssh_keys[0] | default("") | length >= 68 }}'
+        fail_msg: Please provide a public SSH key in config.yml
+
+    - name: Verify Let's Encrypt e-mail
+      assert:
+        that:
+          - '{{ config.gitlab.lets_encrypt_contact | length > 0 }}'
+        fail_msg: Please enter an e-mail contact for Let's Encrypt
+      when: config.gitlab.lets_encrypt_enabled
+
+    - name: Read API token
+      set_fact:
+        cloudscale_api_token: '{{ lookup("env", "CLOUDSCALE_API_TOKEN") }}'
+
+    - name: Verify API token
+      assert:
+        that:
+          - '{{ cloudscale_api_token|length > 0 }}'
+        fail_msg: Please provide the CLOUDSCALE_API_TOKEN environment variable
+
+    # Launch VM
+    # -------------------------------------------------------------------------
+    - name: Launch GitLab
+      cloudscale_ch.cloud.server:
+        name: '{{ config.gitlab.name }}'
+        image: '{{ config.gitlab.image }}'
+        flavor: '{{ config.gitlab.flavor }}'
+        zone: '{{ config.gitlab.zone }}'
+        volume_size_gb: '{{ config.gitlab.volume_size_gb }}'
+        ssh_keys: '{{ config.gitlab.ssh_keys }}'
+      register: gitlab_server
+      until: gitlab_server.ssh_host_keys
+      retries: 15
+      delay: 3
+
+    - name: Extract useful data
+      set_fact:
+        gitlab_user: '{{ gitlab_server.image.default_username }}'
+        gitlab_host: '{{ gitlab_server.interfaces[0].addresses[0]["address"] }}'
+
+    - name: Trust SSH host keys
+      known_hosts:
+        name: '{{ gitlab_host }}'
+        key: '{{ gitlab_host }} {{ item }}'
+      loop: '{{ gitlab_server.ssh_host_keys }}'
+      when: '"ssh-rsa" in item'
+
+    - name: Connect to GitLab server
+      wait_for_connection:
+        timeout: 60
+      delegate_to: '{{ gitlab_user }}@{{ gitlab_host }}'
+
+    - name: Define external url
+      set_fact:
+        external_url: 'https://{{
+          (config.gitlab.fqdn == "auto")
+          | ternary(
+            gitlab_host | replace(".", "-") + ".cust.cloudscale.ch",
+            config.gitlab.fqdn
+          )}}'
+
+    - name: Ask for DNS update
+      pause:
+        prompt: |-
+          The server has been launched with the following IPs:
+
+          {% for address in gitlab_server.interfaces | json_query('[?type==`public`].addresses[].address') %}
+          - {{ address }}
+          {% endfor %}
+
+          Please point the '{{ config.gitlab.fqdn }}' domain to these addresses, then press enter
+      when: config.gitlab.fqdn != 'auto'
+
+    - name: Add GitLab server to inventory
+      add_host:
+        name: gitlab
+        ansible_host: '{{ gitlab_host }}'
+        ansible_user: '{{ gitlab_user }}'
+        config: '{{ config }}'
+        cloudscale_api_token: '{{ cloudscale_api_token }}'
+        external_url: '{{ external_url }}'
+      changed_when: false
+
+- name: Install GitLab and GitLab Runner
+  hosts: gitlab
+  tasks:
+
+    # Install GitLab Server
+    # -------------------------------------------------------------------------
+    - name: Ensure the package manager is supported
+      assert:
+        that:
+          - ansible_pkg_mgr in ('apt', 'dnf', 'yum')
+        fail_msg: 'Only apt and yum are currently supported'
+
+    - name: Download GitLab package repository script
+      get_url:
+        url: 'https://packages.gitlab.com/install/repositories/gitlab/{{ config.gitlab.package }}/script.deb.sh'
+        dest: /tmp/setup-gitlab-repo
+        mode: '0755'
+      when: ansible_pkg_mgr == 'apt'
+
+    - name: Download GitLab package repository script
+      get_url:
+        url: 'https://packages.gitlab.com/install/repositories/gitlab/{{ config.gitlab.package }}/script.rpm.sh'
+        dest: /tmp/setup-gitlab-repo
+        mode: '0755'
+      when: ansible_pkg_mgr in ('yum', 'dnf')
+
+    - name: Configure GitLab package repository
+      shell: /tmp/setup-gitlab-repo && touch /etc/.setup-gitlab-repo
+      args:
+        creates: /etc/.setup-gitlab-repo
+      become: true
+
+    - name: Install GitLab
+      package:
+        name: '{{ config.gitlab.package }}'
+        state: present
+      become: true
+      register: install
+
+    - name: Configure GitLab
+      template:
+        src: ../templates/gitlab.rb.j2
+        dest: /etc/gitlab/gitlab.rb
+        owner: root
+        group: root
+        mode: '0600'
+      register: gitlab_configuration
+      become: true
+
+    # Do not run as handler, since we need this to happen in this order
+    - name: Reconfigure GitLab
+      command: gitlab-ctl reconfigure
+      when: gitlab_configuration.changed
+      become: true
+
+    - name: Read initial password
+      shell: >
+        cat /etc/gitlab/initial_root_password | grep Password | cut -d ' ' -f 2
+      become: true
+      register: password
+      changed_when: False
+
+    # Install GitLab Runner
+    # -------------------------------------------------------------------------
+    - name: Download GitLab package repository script
+      get_url:
+        url: 'https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh'
+        dest: /tmp/setup-gitlab-runner-repo
+        mode: '0755'
+        force: no
+      when: ansible_pkg_mgr == 'apt'
+
+    - name: Download GitLab package repository script
+      get_url:
+        url: 'https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.rpm.sh'
+        dest: /tmp/setup-gitlab-runner-repo
+        mode: '0755'
+        force: no
+      when: ansible_pkg_mgr in ('yum', 'dnf')
+
+    - name: Configure GitLab package repository
+      shell: /tmp/setup-gitlab-runner-repo && touch /etc/.setup-gitlab-runner-repo
+      args:
+        creates: /etc/.setup-gitlab-runner-repo
+      become: true
+
+    - name: Install GitLab Runner
+      package:
+        name: gitlab-runner
+        state: present
+      become: true
+      register: gitlab_runner_install
+
+    - name: Install Docker Machine fork
+      get_url:
+        url: '{{ config.gitlab_runner.docker_machine_url }}'
+        checksum: '{{ config.gitlab_runner.docker_machine_checksum }}'
+        dest: /usr/local/bin/docker-machine
+        mode: 0755
+      become: true
+
+    - name: Download cloudscale.ch Docker Machine driver
+      get_url:
+        url: '{{ config.gitlab_runner.cloudscale_driver_url }}'
+        checksum: '{{ config.gitlab_runner.cloudscale_driver_checksum }}'
+        dest: /var/tmp/cloudscale-driver.tar.gz
+
+    - name: Install cloudscale.ch Docker Machine driver
+      unarchive:
+        src: /var/tmp/cloudscale-driver.tar.gz
+        dest: /usr/local/bin
+        remote_src: true
+        include: docker-machine-driver-cloudscale
+      become: true
+
+    # Configure GitLab Runner
+    # -------------------------------------------------------------------------
+    - name: Get GitLab Runner registration status
+      shell: gitlab-runner verify 2>&1 | grep -q alive
+      register: gitlab_runner_verification
+      failed_when: gitlab_runner_verification.rc not in (0, 1)
+      become: true
+      changed_when: False
+
+    - name: Get GitLab Runner registration token
+      command: >
+        gitlab-rails runner
+        -e production
+        "puts Gitlab::CurrentSettings.current_application_settings.runners_registration_token"
+      register: gitlab_runner_registration_token_query
+      become: true
+      when: gitlab_runner_verification.rc == 1
+
+    # It is not entirely simple to configure GitLab Runner in a way where
+    # Ansible alone is responsible for the config file. We use the following
+    # workaround to accomplish this:
+    # https://gitlab.com/gitlab-org/gitlab-runner/-/issues/3553#note_108527430
+    - name: Get GitLab Runner token
+      uri:
+        url: '{{ external_url }}/api/v4/runners'
+        method: POST
+        body_format: form-urlencoded
+        body:
+          token: '{{ gitlab_runner_registration_token_query.stdout }}'
+          description: Autoscale Runner Manager
+        status_code: [200, 201]
+      register: gitlab_runner_token_query
+      when: gitlab_runner_verification.rc == 1
+
+    - name: Store GitLab Runner token
+      copy:
+        content: '{{ gitlab_runner_token_query.json.token }}'
+        dest: '/etc/gitlab-runner/.token'
+        mode: '0600'
+      become: true
+      when: gitlab_runner_verification.rc == 1
+
+    - name: Read GitLab Runner token
+      command: cat /etc/gitlab-runner/.token
+      become: true
+      register: gitlab_runner_token
+      changed_when: false
+
+    - name: Configure GitLab Runner
+      template:
+        src: ../templates/gitlab-runner.toml.j2
+        dest: /etc/gitlab-runner/config.toml
+        owner: root
+        group: root
+        mode: '0600'
+      become: true
+      register: gitlab_runner_config
+
+    - name: Restart GitLab Runner
+      systemd:
+        name: gitlab-runner
+        state: restarted
+      become: true
+      when: gitlab_runner_config.changed
+
+    # Show Results
+    # -------------------------------------------------------------------------
+    - name: Show result after initial install
+      pause:
+        seconds: 1
+        prompt: |-
+          ========================
+          GitLab is now running at {{ external_url }}.
+          Host: {{ ansible_user }}@{{ ansible_host }}
+
+          Use the following credentials to log in to the web interface:
+
+          username: root
+          password: {{ password.stdout | trim }}
+
+          This password will expire in 24 hours and needs to be changed before.
+          ========================
+
+      changed_when: true
+      when: gitlab_runner_install.changed
