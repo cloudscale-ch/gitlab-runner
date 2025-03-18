@@ -59,7 +59,6 @@
         name: '{{ gitlab_host }}'
         key: '{{ gitlab_host }} {{ item }}'
       loop: '{{ gitlab_server.ssh_host_keys }}'
-      when: '"ssh-rsa" in item'
 
     - name: Connect to GitLab server
       ansible.builtin.wait_for_connection:
