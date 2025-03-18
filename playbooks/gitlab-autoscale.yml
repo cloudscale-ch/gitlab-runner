@@ -194,29 +194,6 @@
       become: true
       register: gitlab_runner_install
 
-    - name: Install Docker Machine fork
-      ansible.builtin.get_url:
-        url: '{{ config.gitlab_runner.docker_machine_url }}'
-        checksum: '{{ config.gitlab_runner.docker_machine_checksum }}'
-        dest: /usr/local/bin/docker-machine
-        mode: '0755'
-      become: true
-
-    - name: Download cloudscale.ch Docker Machine driver
-      ansible.builtin.get_url:
-        url: '{{ config.gitlab_runner.cloudscale_driver_url }}'
-        checksum: '{{ config.gitlab_runner.cloudscale_driver_checksum }}'
-        dest: /var/tmp/cloudscale-driver.tar.gz
-        mode: '0644'
-
-    - name: Install cloudscale.ch Docker Machine driver
-      ansible.builtin.unarchive:
-        src: /var/tmp/cloudscale-driver.tar.gz
-        dest: /usr/local/bin
-        remote_src: true
-        include: docker-machine-driver-cloudscale
-      become: true
-
     # Configure GitLab Runner
     # -------------------------------------------------------------------------
     - name: Get GitLab Runner registration status

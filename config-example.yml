@@ -22,14 +22,14 @@ gitlab:
   # The image used for the GitLab server, note that this repository assumes
   # this to be Debian, Ubuntu, RHEL, or CentOS. Though adding support for
   # another distribution should be easy.
-  image: ubuntu-22.04
+  image: ubuntu-24.04
 
   # GitLab requires 4GB of RAM and recommends 4 CPU cores. We use 8GB of RAM,
   # since we intend to run a single GitLab Runner on the same host.
   flavor: flex-8-4
 
   # Can be either lpg1, or rma1.
-  zone: rma1
+  zone: lpg1
 
   # Depending on your needs, you may want to increase this.
   volume_size_gb: 25
@@ -44,29 +44,52 @@ gitlab:
     #cloud-config
     package_upgrade: true
 
-# GitLab Runner settings
+# GitLab runner instances settings
 gitlab_runner:
 
-  # The image to use as a base for the runners
-  image: ubuntu-22.04
+  # The image to use as a base for the instances
+  image: ubuntu-24.04
 
-  # The flavor to use for the runners
+  # The flavor to use for the instances
   flavor: flex-8-4
 
-  # Upper limit of autoscaled runners
-  runner_limit: 10
+  # The zone in which to launch instances
+  zone: lpg1
 
-  # How many runners should be kept running at all times
-  idle_count: 0
+  # The size of the root disk
+  volume_size_gb: 25
 
-  # How long an idle runner is kept running
-  idle_time: 60
+  # The user data applied to each instance
+  user_data: ""
 
-  # The number of builds a runner completes, before it is removed
-  max_builds: 100
+  # Upper limit of instances
+  max_instances: 10
 
-  # How many runners should be newly added in parallel
-  max_growth_rate: 2
+  # How many jobs a single instance will process in parallel
+  capacity_per_instance: 4
+
+  # The number of jobs an instance completes, before it is removed
+  max_builds: 1024
+
+  # Delete instances when the controlling gitlab runner is shut down. This
+  # ensures that a new fleeting plugin release causes new runners to be
+  # created, but can introduce some instance churn.
+  delete_instances_on_shutdown: true
+
+  # The autoscale policies, as documented by GitLab:
+  # https://docs.gitlab.com/runner/configuration/advanced-configuration/#the-runnersautoscalerpolicy-sections
+  policies:
+
+    - name: Default Policy
+
+      # Unix cron formatted times during which this policy is active
+      period: ["* * * * *"]
+
+      # Target idle capacity we want to be immediately available for jobs
+      idle_count: 1
+
+      # Amount of time an instance can be idle before it is terminated
+      idle_time: "60s"
 
   # You can optionally use S3 for CI caches. This allows you to use the 'cache'
   # key in your .gitlab-ci.yml, and have that cache shared across runners.
@@ -77,7 +100,7 @@ gitlab_runner:
   s3_cache: false
 
   # Set to rma/lpg depending on where you created your bucket
-  s3_endpoint: objects.rma.cloudscale.ch
+  s3_endpoint: objects.lpg.cloudscale.ch
 
   # The credentials shown in your control panel
   s3_access_key: ''
@@ -85,11 +108,3 @@ gitlab_runner:
 
   # The name of the bucket you created (must exist already).
   s3_bucket: ''
-
-  # Docker Machine version to use
-  docker_machine_url: https://gitlab-docker-machine-downloads.s3.amazonaws.com/v0.16.2-gitlab.19/docker-machine-Linux-x86_64
-  docker_machine_checksum: sha256:0c92b4acead3fbca5e27cae1df9f3b2b7ca0874faa7689d4c3fb3988cae11929
-
-  # cloudscale.ch Docker Machine driver
-  cloudscale_driver_url: https://github.com/cloudscale-ch/docker-machine-driver-cloudscale/releases/download/v1.2.1/docker-machine-driver-cloudscale_1.2.1_linux_amd64.tar.gz
-  cloudscale_driver_checksum: sha256:829816d11790997877124b500e5ca1980078babe8efac2e7b58026899de10940
