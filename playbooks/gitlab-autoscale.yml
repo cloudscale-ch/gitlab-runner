@@ -196,6 +196,12 @@
 
     # Configure GitLab Runner
     # -------------------------------------------------------------------------
+    - name: Check Gitlab Runner registration status
+      ansible.builtin.stat:
+        path: /etc/gitlab-runner/.token
+      register: gitlab_runner_token
+      become: true
+
     - name: Get GitLab Runner registration status
       ansible.builtin.shell: set -euo pipefail; gitlab-runner verify 2>&1 | grep -q alive
       args:
@@ -204,6 +210,7 @@
       failed_when: gitlab_runner_verification.rc not in (0, 1)
       become: true
       changed_when: true
+      when: not gitlab_runner_token.stat.exists
 
     - name: Get GitLab Runner registration token
       ansible.builtin.command: >
@@ -212,7 +219,9 @@
         "puts Gitlab::CurrentSettings.current_application_settings.runners_registration_token"
       register: gitlab_runner_registration_token_query
       become: true
-      when: gitlab_runner_verification.rc == 1
+      when:
+        - not gitlab_runner_token.stat.exists
+        - gitlab_runner_verification.rc == 1
       changed_when: true
 
     # It is not entirely simple to configure GitLab Runner in a way where
@@ -229,7 +238,9 @@
           description: Autoscale Runner Manager
         status_code: [200, 201]
       register: gitlab_runner_token_query
-      when: gitlab_runner_verification.rc == 1
+      when:
+        - not gitlab_runner_token.stat.exists
+        - gitlab_runner_verification.rc == 1
 
     - name: Store GitLab Runner token
       ansible.builtin.copy:
@@ -237,7 +248,9 @@
         dest: '/etc/gitlab-runner/.token'
         mode: '0600'
       become: true
-      when: gitlab_runner_verification.rc == 1
+      when:
+        - not gitlab_runner_token.stat.exists
+        - gitlab_runner_verification.rc == 1
 
     - name: Read GitLab Runner token
       ansible.builtin.command: cat /etc/gitlab-runner/.token
