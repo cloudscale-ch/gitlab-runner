@@ -47,7 +47,7 @@
         user_data: '{{ config.gitlab.user_data }}'
       register: gitlab_server
       until: gitlab_server.ssh_host_keys
-      retries: 15
+      retries: 60
       delay: 3
 
     - name: Extract useful data
