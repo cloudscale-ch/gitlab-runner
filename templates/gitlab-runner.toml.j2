@@ -5,14 +5,17 @@ concurrent = {{
 [[runners]]
   url = "{{ external_url }}"
   token = "{{ gitlab_runner_token.stdout }}"             
-  name = "Autoscale Runner Manager"
+  name = "Fleeting instances at cloudscale.ch"
   executor = "docker-autoscaler"
+
+[runners.docker]
+  image = "alpine:latest"
 
 [runners.autoscaler.connector_config]
   use_external_addr = true
 
 [runners.autoscaler]
-  plugin = "quay.io/cloudscalech/fleeting:latest"
+  plugin = "quay.io/cloudscalech/fleeting-plugin-cloudscale:latest"
 
   capacity_per_instance = {{ config.gitlab_runner.capacity_per_instance }}
   max_instances = {{ config.gitlab_runner.max_instances }}
@@ -28,13 +31,13 @@ concurrent = {{
     | ternary('true', 'false') }}
 
 [runners.autoscaler.plugin_config]
-  name = "fleeting"
+  group = "{{ config.gitlab_runner.group }}"
   api_token = "{{ cloudscale_api_token }}"
   image = "{{ config.gitlab_runner.image }}"
   flavor = "{{ config.gitlab_runner.flavor }}"
   zone = "{{ config.gitlab_runner.zone }}"
   user_data = """{{ config.gitlab_runner.user_data }}"""
-  volume_size_gb = "{{ config.gitlab_runner.volume_size_gb | default(10) }}"
+  volume_size_gb = {{ config.gitlab_runner.volume_size_gb | default(10) }}
 
 {% for policy in config.gitlab_runner.policies %}
 # {{ policy.name }}

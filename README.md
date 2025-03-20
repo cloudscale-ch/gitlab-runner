@@ -2,21 +2,21 @@
 
 💡 A guide and Ansible playbook for running GitLab on cloudscale.ch, together with autoscaled runners and distributed caching.
 
-## Introduction
+## ℹ️ Introduction
 
-We are heavy users of GitLab, as are many of our customers. One feature a number lot of our customers use is autoscaling GitLab runners. With them, CI capacity is added automatically when needed and removed when it is not.
+We are heavy users of GitLab, as are many of our customers. One feature a number of our customers use, is autoscaling GitLab runners. With them, CI capacity is added automatically when needed, and removed when it is not.
 
-This is precisely where a cloud is best: you get the resources when you need them and do not pay for them when you do not. Compute usage at cloudscale.ch is billed to-the-second, and CI usage is highly variable.
+This is precisely where a cloud shines: you get the resources when you need them and do not pay for them when you do not. Compute usage at cloudscale.ch is billed to-the-second, and CI usage is highly variable.
 
 This repository explains how to configure GitLab to use autoscaling GitLab runners with cloudscale.ch. Additionally, it includes the use of distributed caching, which is often desirable when using several CI runners.
 
-Below, you will find two approaches:
+The playbook contained in this repository will help you set up GitLab, and GitLab runners automatically. You can use this to get started or to take the setup for a test-drive.
 
-🚀 A playbook contained in this repository will help you set up GitLab, and GitLab runners automatically. You can use this to get started or to take the setup for a test-drive.
+### Manual Setup
 
-📕 Documentation on how to set this up yourself. This approach is useful if you already use GitLab or have a different configuration and deployment method.
+Documentation on how to configure our autoscale plugin for GitLab, called `fleeting-plugin-cloudscale`, can be found in the plugin repository's README:
 
-Note: Though it is possible to use your own runners for the GitLab SaaS product, the focus here is on managed GitLab.
+https://github.com/cloudscale-ch/fleeting-plugin-cloudscale
 
 ## 🚀 Setup With Ansible Playbook
 
@@ -71,7 +71,7 @@ liking:
 cp config-example.yml config.yml
 ```
 
-As a minimum, you need to set the following:
+At a minimum, you need to set the following:
 
 - `ssh_keys` (add your SSH public key)
 - `lets_encrypt_contact` (an e-mail address for Let's Encrypt certificates)
@@ -84,132 +84,48 @@ Run the following playbook to create a GitLab VM, install GitLab, and configure 
 playbooks/gitlab-autoscale.yml
 ```
 
-The thus installed GitLab runner does not run any jobs of its own. Instead, it is co-located on the GitLab server where it ensures that queued jobs are worked on by autoscaled workers.
+The installed GitLab runner does not run any jobs of its own. Instead, it is co-located on the GitLab server where it ensures that queued jobs are processed by autoscaled workers.
 
 Look at the source code to see how everything is put together. The different elements are organized into sections that should be easy to follow.
-
-### Additional Information
-
-To test your new setup, see [Test Drive](#test-drive).
-
-To read about additional considerations, see [Additional Considerations](#additional-considerations).
-
-## 📕 Manual Setup
-
-To get started, install GitLab according to GitLab's official documentation:
-
-https://about.gitlab.com/install/
-
-Next, you need at least one GitLab runner that is always on. This runner will be responsible for launching other runners, as needed. It can be run anywhere and can also run its own jobs.
-
-A good option so that you do not have to use extra resources for this runner, is to simply install it on the same host as your GitLab server. Here, you want a runner that has no other jobs (or its CI jobs will compete with your GitLab server for resources).
-
-Either way, the following applies whether you install this runner on your GitLab server host or in a dedicated VM or container.
-
-### Install GitLab Runner
-
-There are multiple ways to install GitLab runner:
-
-https://docs.gitlab.com/runner/install/
-
-We recommend using a distro-specific package, as it makes updates easier:
-
-https://docs.gitlab.com/runner/install/linux-repository.html
-
-Please skip the "Register a runner" step, as this will be done with a more specific call further down.
-
-### Install Docker Machine
-
-GitLab runner uses Docker Machine to launch VMs and to run the GitLab runner container. Though Docker Machine has been deprecated by Docker Inc., there is currently no better alternative.
-
-GitLab maintains a fork of Docker Machine, which will be be supported until a better solution is provided.
-
-To install, simply run the following commands on your VM:
-
-```bash
-sudo curl -L https://gitlab-docker-machine-downloads.s3.amazonaws.com/v0.16.2-gitlab.19/docker-machine-Linux-x86_64 \
--o /usr/local/bin/docker-machine
-
-sudo chmod +x /usr/local/bin/docker-machine
-```
-
-Additionally, you will need the cloudscale.ch driver for Docker Machine:
-
-```bash
-curl -L https://github.com/cloudscale-ch/docker-machine-driver-cloudscale/releases/download/v1.2.1/docker-machine-driver-cloudscale_1.2.1_linux_amd64.tar.gz \
-| tar xz docker-machine-driver-cloudscale
-
-sudo mv docker-machine-driver-cloudscale /usr/local/bin/
-```
-
-You can check the following repositories for the latest releases:
-
-- https://gitlab.com/gitlab-org/ci-cd/docker-machine
-- https://github.com/cloudscale-ch/docker-machine-driver-cloudscale
-
-### Acquire GitLab Runner Registration Token
-
-To register your runner, you need a registration token. This can be a global token (to create a shared runner) or a project-specific token.
-
-For a shared runner, open the admin dashboard at `/admin`, and select "Runners" from the left (`/admin/runners`). Clicking on "Register an instance runner" allows you to view and copy the registration token.
-
-### Register GitLab Runner
-
-The following command will register the GitLab runner, and configure it to autoscale CI jobs using ephemeral runner instances. Run this on the VM you have installed your runner on:
-
-```bash
-# The token that will be used to create new runners
-export CLOUDSCALE_API_TOKEN="..."
-
-# The flavor to use for autoscale GitLab runners
-export CLOUDSCALE_FLAVOR="flex-8-4"
-
-# Your GitLab instance
-export GITLAB_URL="https://..."
-
-# The token to register runners with
-export GITLAB_RUNNER_REGISTRATION_TOKEN="..."
-
-sudo gitlab-runner register \
-   --non-interactive \
-   --url "$GITLAB_URL" \
-   --registration-token "$GITLAB_RUNNER_REGISTRATION_TOKEN" \
-   --run-untagged \
-   --executor "docker+machine" \
-   --docker-image ubuntu \
-   --description "GitLab Runner Manager" \
-   --machine-machine-driver cloudscale \
-   --machine-machine-name 'autoscale-%s' \
-   --machine-machine-options "cloudscale-token=$CLOUDSCALE_API_TOKEN" \
-   --machine-machine-options "cloudscale-flavor=$CLOUDSCALE_FLAVOR"
-```
-
-Having done this, open the `/etc/gitlab-runner/config.toml` file, and change the `concurrent = 1` value to a higher value. The number you select is the
-maximum number of runners starting in parallel.
-
-After editing the file, run `sudo systemctl restart gitlab-runner`.
 
 ## 💡 Additional Information
 
 ### Test Drive
 
-To run a simple CI job on your new setup, you can login to your GitLab instance, create an empty project, and then use "Web IDE" to add a new file.
+To run a simple CI job on your new setup, you can login to your GitLab instance, create an empty project, and then commit the following `.gitlab-ci.yml` file:
 
-Select `.gitlab-ci.yml`. and pick the `Bash` template. It will not do anything useful, but if you commit it, the job should be run on a VM managed by your new GitLab setup!
+```yml
+image: debian
 
-### Additional Considerations
+cache:
+  key: global-cache
 
-#### Docker Image Cache
+build:
+  script:
+    - apt-get update
+    - apt-get install -y cowsay
+    - >
+      test -f cached
+      && /usr/games/cowsay "I ran on $CI_RUNNER_DESCRIPTION and found a cache"
+      || /usr/games/cowsay "I ran on $CI_RUNNER_DESCRIPTION and found no cache"
+    - touch cached
+    
+  cache:
+    paths:
+      - cached
+```
+
+### Docker Image Cache
 
 GitLab recommends the use of a pull-through cache for the Docker registry. This is useful if you hit rate limits when accessing docker images.
 
-This is not currently covered in this guide, but let us know you would like it and we will be happy to add additional information.
+This is not currently covered in this guide, but let us know if you are interested, and we will add additional information.
 
-Here is the GitLab guide on this subject:
+Here is the related GitLab guide:
 
 https://docs.gitlab.com/runner/configuration/speed_up_job_execution.html#docker-hub-registry-mirror
 
-A good approach would be to put this cache on a VM with private network, which the runners could access.
+A good approach would be to put this cache on a VM with a private network, which the runners could access.
 
 You can also use alternative registries, or login to the Docker Hub before using it, which yields a higher rate limit. See the following StackOverflow answer on how to set up GitLab runner to authenticate to a Docker registry, before pulling images:
 

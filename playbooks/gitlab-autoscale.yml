@@ -66,6 +66,14 @@
         timeout: 60
       delegate_to: '{{ gitlab_user }}@{{ gitlab_host }}'
 
+    - name: Wait for cloud-init to complete
+      ansible.builtin.shell: command -v cloud-init >/dev/null || exit 0; cloud-init status --wait; test $? -ne 1
+      register: cloud_init
+      until: cloud_init.rc == 0
+      retries: 60
+      delay: 3
+      changed_when: false
+
     - name: Define external url  # noqa: jinja[spacing]
       ansible.builtin.set_fact:
         external_url: 'https://{{
@@ -235,7 +243,7 @@
         body_format: form-urlencoded
         body:
           token: '{{ gitlab_runner_registration_token_query.stdout }}'
-          description: Autoscale Runner Manager
+          description: Fleeting instances at cloudscale.ch
         status_code: [200, 201]
       register: gitlab_runner_token_query
       when:
@@ -267,6 +275,19 @@
         mode: '0600'
       become: true
       register: gitlab_runner_config
+
+    - name: Query fleeting-plugin-cloudscale
+      ansible.builtin.command: /usr/bin/gitlab-runner fleeting list
+      register: gitlab_runner_fleeting_list
+      failed_when: false
+      changed_when: false
+      become: true
+
+    - name: Install fleeting-plugin-cloudscale
+      ansible.builtin.command: gitlab-runner fleeting install
+      when: gitlab_runner_fleeting_list.rc != 0
+      changed_when: true
+      become: true
 
     # We do not use a handler here, as we want this in one playbook
     - name: Restart GitLab Runner
