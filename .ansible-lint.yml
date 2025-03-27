@@ -1,0 +1,7 @@
+skip_list:
+  # We concentrate on a single playbook for clarity, so there are no handlers
+  - no-handler
+
+  # Relative paths are needed, so we do not have to store the templates in
+  # playbooks/templates, where they are a bit more hidden.
+  - no-relative-paths
