@@ -66,6 +66,8 @@ gitlab_runner:
   # a working docker configuration.
   user_data: |
     #cloud-config
+    package_upgrade: true
+
     apt:
       sources:
         docker.list:
