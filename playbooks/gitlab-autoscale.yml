@@ -45,6 +45,10 @@
         volume_size_gb: '{{ config.gitlab.volume_size_gb }}'
         ssh_keys: '{{ config.gitlab.ssh_keys }}'
         user_data: '{{ config.gitlab.user_data }}'
+        interfaces: |
+          [{% for network in config.gitlab.networks | default(["public"]) %}
+            {"network": "{{ network }}"}{% if not loop.last %},{% endif %}
+          {% endfor %}]
       register: gitlab_server
       until: gitlab_server.ssh_host_keys
       retries: 60

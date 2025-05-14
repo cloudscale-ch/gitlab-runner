@@ -44,6 +44,14 @@ gitlab:
     #cloud-config
     package_upgrade: true
 
+  # List of networks this gitlab server is part of. This may be a private
+  # network uuid, or the constant "public" for public networks.
+  #
+  # Note that at least one network entry has to be shared with the gitlab
+  # runner config below, or the runners won't be able to contact the server.
+  networks:
+    - public
+
 # GitLab runner instances settings
 gitlab_runner:
 
@@ -64,6 +72,16 @@ gitlab_runner:
 
   # The size of the root disk
   volume_size_gb: 25
+
+  # The networks attached to the gitlab runner. The first network is used to
+  # communicate with the GitLab server. The GitLab runner typically needs
+  # internet access, so if only private networks are configured, a default
+  # gateway has to be configured.
+  #
+  # The first entry in the list of networks is used to communicate with
+  # the GitLab server.
+  networks:
+    - public
 
   # The user data applied to each instance. Note that GitLab expects to find
   # a working docker configuration.

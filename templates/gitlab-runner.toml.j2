@@ -38,6 +38,11 @@ concurrent = {{
   zone = "{{ config.gitlab_runner.zone }}"
   user_data = """{{ config.gitlab_runner.user_data }}"""
   volume_size_gb = {{ config.gitlab_runner.volume_size_gb | default(10) }}
+  interfaces = [
+    {% for network in config.gitlab_runner.networks | default(["public"]) %}
+    { network = "{{ network }}" },
+    {% endfor %}
+  ]
 
 {% for policy in config.gitlab_runner.policies %}
 # {{ policy.name }}
