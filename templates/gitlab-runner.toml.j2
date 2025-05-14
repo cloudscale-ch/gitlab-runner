@@ -15,7 +15,7 @@ concurrent = {{
   use_external_addr = true
 
 [runners.autoscaler]
-  plugin = "quay.io/cloudscalech/fleeting-plugin-cloudscale:latest"
+  plugin = "{{ config.gitlab_runner.fleeting_image | default('quay.io/cloudscalech/fleeting-plugin-cloudscale:latest') }}"
 
   capacity_per_instance = {{ config.gitlab_runner.capacity_per_instance }}
   max_instances = {{ config.gitlab_runner.max_instances }}

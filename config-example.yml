@@ -47,6 +47,9 @@ gitlab:
 # GitLab runner instances settings
 gitlab_runner:
 
+  # The fleeting plugin image to use
+  fleeting_image: quay.io/cloudscalech/fleeting-plugin-cloudscale:latest
+
   # Unique name for this group of managed runner instances
   group: fleeting
 
