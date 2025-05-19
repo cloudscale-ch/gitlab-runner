@@ -44,8 +44,19 @@ gitlab:
     #cloud-config
     package_upgrade: true
 
+  # List of networks this GitLab server is part of. This may be a private
+  # network uuid, or the constant "public" for public networks.
+  #
+  # Note that at least one network entry has to be shared with the GitLab
+  # runner config below, or the runners won't be able to contact the server.
+  networks:
+    - public
+
 # GitLab runner instances settings
 gitlab_runner:
+
+  # The fleeting plugin image to use
+  fleeting_image: quay.io/cloudscalech/fleeting-plugin-cloudscale:latest
 
   # Unique name for this group of managed runner instances
   group: fleeting
@@ -61,6 +72,13 @@ gitlab_runner:
 
   # The size of the root disk
   volume_size_gb: 25
+
+  # The networks attached to the GitLab runner. The first network is used to
+  # communicate with the GitLab server. The GitLab runner typically needs
+  # internet access, so if only private networks are configured, a default
+  # gateway has to be configured.
+  networks:
+    - public
 
   # The user data applied to each instance. Note that GitLab expects to find
   # a working docker configuration.
@@ -93,7 +111,7 @@ gitlab_runner:
   # The number of jobs an instance completes, before it is removed
   max_builds: 1024
 
-  # Delete instances when the controlling gitlab runner is shut down. This
+  # Delete instances when the controlling GitLab runner is shut down. This
   # ensures that a new fleeting plugin release causes new runners to be
   # created, but can introduce some instance churn.
   #
