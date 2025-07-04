@@ -30,8 +30,8 @@ To use the playbook provided in this repository, you need the following:
 Clone this repository:
 
 ```bash
-git clone https://github.com/cloudscale-ch/gitlab-autoscale
-cd gitlab-autoscale
+git clone https://github.com/cloudscale-ch/gitlab-runner.git
+cd gitlab-runner
 ```
 
 Create a virtual environment:
